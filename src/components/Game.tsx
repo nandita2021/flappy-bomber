@@ -1,24 +1,28 @@
 import { useCallback, useReducer, useRef, useState } from 'react';
-import { type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  WORLD_HEIGHT, birdX, createWorld, dive, flap, pause, resetWorld, resize, step, togglePause,
+  WORLD_HEIGHT, createWorld, dive, finalScore, isInvulnerable, jump, metres, pause, playerX, resetWorld, resize, step, togglePause,
   type GameEvent, type World,
 } from '../engine';
 import { useAutoPause } from '../hooks/useAutoPause';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { useHighScore } from '../hooks/useHighScore';
 import { useKeyboardControls } from '../hooks/useKeyboardControls';
+import { useMuted } from '../hooks/useMuted';
 import { useSwipeControls } from '../hooks/useSwipeControls';
 import { haptics } from '../platform/haptics';
-import { Bird } from './Bird';
-import { GameButton } from './GameButton';
+import { sound } from '../platform/sound';
+import { City } from './City';
+import { Ground } from './Ground';
+import { Blasts, Bombs } from './Hazards';
+import { Hud } from './Hud';
 import { Overlay } from './Overlay';
-import { Pipes } from './Pipes';
-import { Ground, Sky } from './Scenery';
-import { colors } from './theme';
+import { Particles } from './Particles';
+import { Supplies } from './Supplies';
+import { Survivor } from './Survivor';
 
-const RESTART_DELAY = 0.6;
+const RESTART_DELAY = 0.8;
 
 /** The single game screen shared by web, iOS and Android. */
 export function Game() {
@@ -27,19 +31,30 @@ export function Game() {
   const [, render] = useReducer((n: number) => (n + 1) % 1e9, 0);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const { best, submit } = useHighScore();
+  const { muted, toggle: toggleMute } = useMuted();
   const bestAtStart = useRef(0);
   const overAt = useRef(0);
 
   const handleEvents = useCallback((events: GameEvent[]) => {
     for (const e of events) {
-      if (e === 'flap') haptics.flap();
-      else if (e === 'dive') haptics.dive();
-      else if (e === 'score') haptics.score();
-      else if (e === 'hit') {
-        haptics.hit();
-        overAt.current = world.time;
-        submit(world.score);
-      } else if (e === 'start') bestAtStart.current = best;
+      switch (e) {
+        case 'start': bestAtStart.current = best; sound.play('siren'); sound.startAmbience(); break;
+        case 'jump': sound.play('jump'); haptics.jump(); break;
+        case 'dive': haptics.dive(); break;
+        case 'food': sound.play('food'); haptics.pickup(); break;
+        case 'drink': sound.play('drink'); haptics.pickup(); break;
+        case 'money': sound.play('coin'); haptics.pickup(); break;
+        case 'bombDrop': sound.play('whistle'); break;
+        case 'explosion': sound.play('explosion'); haptics.explosion(); break;
+        case 'hurt': sound.play('hurt'); haptics.hurt(); break;
+        case 'lowEnergy': sound.play('warning'); haptics.warning(); break;
+        case 'over':
+          sound.play('gameover');
+          haptics.over();
+          overAt.current = world.time;
+          submit(finalScore(world));
+          break;
+      }
     }
   }, [best, submit, world]);
 
@@ -47,28 +62,35 @@ export function Game() {
 
   const restart = useCallback(() => {
     resetWorld(world);
-    handleEvents(flap(world));
+    handleEvents(jump(world));
   }, [handleEvents, world]);
 
-  const onFlap = useCallback(() => {
+  const onJump = useCallback(() => {
+    sound.init();
     if (world.phase === 'over') {
       if (world.time - overAt.current > RESTART_DELAY) restart();
       return;
     }
-    handleEvents(flap(world));
+    handleEvents(jump(world));
   }, [handleEvents, restart, world]);
 
   const onDive = useCallback(() => handleEvents(dive(world)), [handleEvents, world]);
-  const onPause = useCallback(() => { handleEvents(togglePause(world)); render(); }, [handleEvents, world]);
+  const onPause = useCallback(() => {
+    const ev = togglePause(world);
+    if (ev.includes('pause')) sound.stopAmbience();
+    if (ev.includes('resume')) sound.startAmbience();
+    handleEvents(ev);
+    render();
+  }, [handleEvents, world]);
+  const onToggleMute = useCallback(() => {
+    const nowMuted = toggleMute();
+    if (!nowMuted && world.phase === 'playing') sound.startAmbience();
+  }, [toggleMute, world]);
 
   useGameLoop((dt) => handleEvents(step(world, dt)), render);
-  useKeyboardControls({ onFlap, onDive, onPause });
-  useAutoPause(() => { pause(world); render(); });
-  const pan = useSwipeControls({
-    onTap: onFlap,
-    onSwipeUp: () => {}, // the touch-down already flapped; a swipe up is just a flap
-    onSwipeDown: onDive,
-  });
+  useKeyboardControls({ onFlap: onJump, onDive, onPause });
+  useAutoPause(() => { pause(world); sound.stopAmbience(); render(); });
+  const pan = useSwipeControls({ onTap: onJump, onSwipeUp: () => {}, onSwipeDown: onDive });
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -76,42 +98,53 @@ export function Game() {
     resize(world, width / (height / WORLD_HEIGHT));
   };
 
-  const scale = size.h / WORLD_HEIGHT;
-  const viewW = world.width * scale;
-  const wingUp = world.phase === 'ready' ? Math.sin(world.time * 14) > 0 : world.time - world.bird.flapTime < 0.12;
-  const isNewBest = world.phase === 'over' && world.score > 0 && world.score > bestAtStart.current;
+  const s = size.h / WORLD_HEIGHT;
+  const viewW = world.width * s;
+  const p = world.player;
+  const shakeX = Math.sin(world.time * 93) * world.shake * 9 * s;
+  const shakeY = Math.cos(world.time * 71) * world.shake * 7 * s;
+  const invuln = isInvulnerable(world);
+  const blink = invuln && Math.sin(world.time * 30) > 0;
+  const score = finalScore(world);
+  const isNewBest = world.phase === 'over' && score > 0 && score > bestAtStart.current;
 
   return (
     <View style={styles.root} onLayout={onLayout}>
       {size.h > 0 && (
         <View style={[styles.stage, { width: viewW, height: size.h }]}>
-          <View style={StyleSheet.absoluteFill} {...pan.panHandlers}>
-            <Sky width={world.width} scale={scale} offset={world.time * 60} />
-            <Pipes pipes={world.pipes} scale={scale} />
-            <Ground width={world.width} scale={scale} offset={world.groundOffset} />
-            <Bird x={birdX(world)} y={world.bird.y} rotation={world.bird.rotation} wingUp={wingUp} scale={scale} />
+          <View style={[StyleSheet.absoluteFill, { transform: [{ translateX: shakeX }, { translateY: shakeY }] }]} {...pan.panHandlers}>
+            <City scale={s} scroll={world.scroll} time={world.time} planes={world.planes} width={world.width} />
+            <Ground scale={s} scroll={world.scroll} craters={world.craters} />
+            <Supplies supplies={world.supplies} time={world.time} scale={s} />
+            <Bombs world={world} scale={s} />
+            <Survivor
+              x={playerX(world)} y={p.y} scale={s} runCycle={p.runCycle} airborne={!p.onGround} vy={p.vy} time={world.time}
+              blink={blink} hurt={world.time - p.hurtTime < 0.25} collapsed={world.phase === 'over' && p.onGround}
+            />
+            <Blasts blasts={world.blasts} scale={s} />
+            <Particles particles={world.particles} scale={s} />
           </View>
+          {world.flash > 0 && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFB070', opacity: world.flash * 0.3 }]} />}
+          {invuln && world.phase === 'playing' && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 6, borderColor: 'rgba(229,72,77,0.6)' }]} />}
 
-          {world.phase === 'playing' && (
-            <>
-              <Text pointerEvents="none" style={[styles.score, { top: insets.top + 24 }]}>{world.score}</Text>
-              <GameButton
-                label="II"
-                variant="icon"
-                accessibilityLabel="Pause"
-                onPress={onPause}
-                style={{ position: 'absolute', top: insets.top + 16, right: insets.right + 16 }}
-              />
-            </>
+          {world.phase !== 'ready' && (
+            <Hud
+              hearts={p.hearts} energy={p.energy} metres={metres(world)} coins={world.coins} time={world.time} muted={muted}
+              top={insets.top} left={insets.left} right={insets.right} onPause={onPause} onToggleMute={onToggleMute}
+              showPause={world.phase === 'playing'}
+            />
           )}
 
           <Overlay
             phase={world.phase}
-            score={world.score}
-            best={Math.max(best, world.phase === 'over' ? world.score : 0)}
+            metres={metres(world)}
+            coins={world.coins}
+            score={score}
+            best={Math.max(best, world.phase === 'over' ? score : 0)}
             isNewBest={isNewBest}
+            cause={world.deathCause}
             canRestart={canRestart}
-            onPlay={onFlap}
+            onPlay={onJump}
             onResume={onPause}
             onRestart={restart}
           />
@@ -122,10 +155,6 @@ export function Game() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#2B2B2B', alignItems: 'center', overflow: 'hidden' },
-  stage: { backgroundColor: colors.sky, overflow: 'hidden' },
-  score: {
-    position: 'absolute', left: 0, right: 0, textAlign: 'center', fontSize: 64, fontWeight: '900', color: colors.text,
-    textShadowColor: colors.ink, textShadowOffset: { width: 3, height: 4 }, textShadowRadius: 0,
-  },
+  root: { flex: 1, backgroundColor: '#0E0908', alignItems: 'center', overflow: 'hidden' },
+  stage: { backgroundColor: '#1E1412', overflow: 'hidden' },
 });
