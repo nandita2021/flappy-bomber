@@ -1,60 +1,69 @@
-# Flappy Wings
+# Flappy Bomber
 
-A Flappy Bird style game that runs on **web, Android and iOS from one shared codebase**, built with
-Expo + React Native + react-native-web.
+A war-themed survival runner that plays on **web, Android and iOS from one shared codebase**
+(Expo + React Native + react-native-web).
 
-## Controls
+Bombers circle over a torn city. You are a civilian with nothing but a bag on your back: run across
+the rubble, leap and flap through the smoke, and grab the air-dropped supplies to stay alive.
+
+- **Play in the browser:** https://nandita2021.github.io/flappy-bomber/
+- **Android APK:** [latest build](https://github.com/nandita2021/flappy-bomber/releases/tag/android-latest)
+
+## How to play
 
 | Action | Phone / tablet | Desktop browser |
 | --- | --- | --- |
-| Flap | Tap anywhere (or swipe up) | Click, `Space`, `↑`, `W` |
-| Dive through a gap | Swipe down | `↓`, `S` |
+| Leap / flap upward | Tap anywhere | Click, `Space`, `↑`, `W` |
+| Drop fast | Swipe down | `↓`, `S` |
 | Pause / resume | Pause button | Pause button, `P`, `Esc` |
-| Restart | Play again button | Button or `Space` |
+| Mute | Speaker button | Speaker button |
 
-Native touches: zero-latency flap on touch-down, haptic feedback (light tap on flap, tick on score,
-error buzz on crash), press-in animations on buttons, safe-area aware HUD (notches, Dynamic Island),
-auto-pause when the app goes to the background or the browser tab is hidden. On the web the page
-never scrolls, zooms or selects text while you play, and mobile browsers vibrate on a crash.
+- Your **strength bar** drains all the time. 🍞 🥫 🍎 🍚 food and 💧 🥛 🧃 drinks refill it. Hit zero and you collapse.
+- 💵 🪙 **money** adds 10 points each.
+- 💣 **Bombs** whistle down from the planes. A blinking red mark shows where each one lands.
+  A blast takes one of your 3 hearts and throws you into the air; you are briefly invincible afterwards.
+- Score = metres run + 10 × money. The game speeds up, bombs fall faster and hunger bites harder the longer you last.
+
+## Sound, animation and feel
+
+- Sound effects for leaps, food, drinks, coins, bomb whistles, explosions, getting hurt, low strength, the
+  air-raid siren and game over, plus a looping war ambience. All sounds are generated for this project.
+- Animated survivor (running legs, flailing arms in the air, collapse), parallax ruined skyline with burning
+  buildings and smoke columns, planes overhead, parachuted supplies, fireballs, shock rings, flying debris,
+  sparks, craters, screen shake and flashes.
+- Haptics on iOS/Android (and vibration on mobile browsers), safe-area aware HUD, auto-pause when the app is
+  backgrounded, no page scroll/zoom while playing on the web, high score and mute setting saved per device.
 
 ## Shared-code architecture
 
 ```
 src/
-  engine/       Pure TypeScript game logic: physics, pipes, scoring, collisions (no React, no platform APIs)
-  hooks/        Game loop (fixed 120 Hz timestep), swipe/tap gestures, keyboard, auto-pause, high score
-  platform/     The only platform-aware code: haptics, storage, browser page setup
-  components/   React Native UI rendered on all three platforms (web via react-native-web)
-App.tsx         Entry point
+  engine/       Pure TypeScript game logic: survivor physics, energy, supplies, bombs, blasts, scoring (no React)
+  hooks/        Fixed 120 Hz game loop, tap/swipe gestures, keyboard, auto-pause, high score, mute
+  platform/     The only platform-aware code: sound, haptics, storage, browser page setup
+  components/   React Native UI shared by all three platforms (web via react-native-web)
+assets/sounds/  Sound effects (WAV)
 ```
 
-- The physics runs at a fixed step, so the game plays the same on 60, 90 and 120 Hz screens.
-- The world is a fixed 640px tall and scales to any screen; wider screens see further ahead.
-- The high score is saved with AsyncStorage (native storage on mobile, localStorage on web).
-
-## Run it
+## Develop
 
 ```bash
 npm install
 npm run web        # browser
 npm run ios        # iOS simulator, or scan the QR code with Expo Go on an iPhone
 npm run android    # Android emulator, or Expo Go on an Android phone
-```
-
-Checks:
-
-```bash
 npm test           # engine unit tests
 npm run typecheck
-npm run build:web  # static web build in dist/
 ```
 
-## Web deployment
+## Deployment
 
-Every push to `main` runs CI (typecheck, tests, web build) and publishes the web version to GitHub
-Pages. Enable it once under **Settings → Pages → Source: GitHub Actions** if it is not already on.
+Every push to `main` deploys automatically:
 
-## Store builds
-
-Use [EAS Build](https://docs.expo.dev/build/introduction/) (`npx eas build -p ios` / `-p android`)
-with your Apple and Google developer accounts to produce App Store and Play Store binaries.
+- **Web:** `.github/workflows/ci.yml` typechecks, runs the tests, builds the web version and publishes it to
+  GitHub Pages.
+- **Android:** `.github/workflows/android.yml` builds a release APK and attaches it to the `android-latest`
+  GitHub Release.
+- **iOS / App Store and Google Play:** these need the owner's Apple Developer and Google Play accounts. Use
+  [EAS](https://docs.expo.dev/build/introduction/): `npx eas build -p ios --profile production` then
+  `npx eas submit -p ios` (and the same with `-p android` for the Play Store).

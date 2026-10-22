@@ -1,0 +1,52 @@
+name: Android APK
+
+# Builds an installable Android APK on every push to main and publishes it on the
+# "android-latest" GitHub Release, so anyone can download and install the game.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --no-install
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk flappy-bomber.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flappy-bomber-apk
+          path: flappy-bomber.apk
+      - name: Publish to the android-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          gh release create android-latest flappy-bomber.apk \
+            --title "Flappy Bomber for Android (latest build)" \
+            --notes "Built from ${GITHUB_SHA::7}. Download flappy-bomber.apk on an Android phone, open it and allow installing from this source." \
+            --target "$GITHUB_SHA" --prerelease
