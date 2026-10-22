@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Flappy Wings",
+    "slug": "flappy-wings",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.flappywings.app",
+      "requireFullScreen": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.flappywings.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "Flappy Wings",
+      "shortName": "Flappy",
+      "themeColor": "#4EC0CA",
+      "backgroundColor": "#4EC0CA"
+    },
+    "backgroundColor": "#4EC0CA"
+  }
+}
