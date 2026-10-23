@@ -3,7 +3,7 @@
  * Units are logical pixels and seconds; the renderer scales the world to the screen.
  */
 export const WORLD_HEIGHT = 640;
-export const MIN_WORLD_WIDTH = 360;
+export const MIN_WORLD_WIDTH = 280; // narrow enough that tall phones (e.g. 430x932) are not cropped
 export const MAX_WORLD_WIDTH = 900;
 
 export const GROUND_HEIGHT = 96;

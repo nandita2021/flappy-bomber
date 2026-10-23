@@ -40,8 +40,10 @@ the rubble, leap and flap through the smoke, and grab the air-dropped supplies t
 src/
   engine/       Pure TypeScript game logic: survivor physics, energy, supplies, bombs, blasts, scoring (no React)
   hooks/        Fixed 120 Hz game loop, tap/swipe gestures, keyboard, auto-pause, high score, mute
-  platform/     The only platform-aware code: sound, haptics, storage, browser page setup
-  components/   React Native UI shared by all three platforms (web via react-native-web)
+  platform/     The only platform-aware code: sound (expo-audio on native, Web Audio in browsers), haptics, storage, page setup
+  render/       Shared scene drawing (drawScene, drawHud) through a tiny Painter interface, with two backends:
+                HTML canvas on the web, Skia on iOS/Android. One canvas per frame keeps phones at 60 fps.
+  components/   React Native screen, menus and buttons shared by all three platforms
 assets/sounds/  Sound effects (WAV)
 ```
 
