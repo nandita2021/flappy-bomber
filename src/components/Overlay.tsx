@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import type { DeathCause, Phase } from '../engine';
 import { GameButton } from './GameButton';
@@ -19,7 +20,7 @@ interface Props {
 
 const isWeb = Platform.OS === 'web';
 
-export function Overlay({ phase, metres, coins, score, best, isNewBest, cause, canRestart, onPlay, onResume, onRestart }: Props) {
+function OverlayView({ phase, metres, coins, score, best, isNewBest, cause, canRestart, onPlay, onResume, onRestart }: Props) {
   if (phase === 'playing') return null;
 
   if (phase === 'ready') {
@@ -70,6 +71,8 @@ export function Overlay({ phase, metres, coins, score, best, isNewBest, cause, c
     </View>
   );
 }
+
+export const Overlay = memo(OverlayView);
 
 function Row({ label, value, big }: { label: string; value: string; big?: boolean }) {
   return (

@@ -2,7 +2,7 @@ import { useCallback, useReducer, useRef, useState } from 'react';
 import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  WORLD_HEIGHT, createWorld, dive, finalScore, isInvulnerable, jump, metres, pause, playerX, resetWorld, resize, step, togglePause,
+  WORLD_HEIGHT, createWorld, dive, finalScore, jump, metres, pause, resetWorld, resize, step, togglePause,
   type GameEvent, type World,
 } from '../engine';
 import { useAutoPause } from '../hooks/useAutoPause';
@@ -13,14 +13,12 @@ import { useMuted } from '../hooks/useMuted';
 import { useSwipeControls } from '../hooks/useSwipeControls';
 import { haptics } from '../platform/haptics';
 import { sound } from '../platform/sound';
-import { City } from './City';
-import { Ground } from './Ground';
-import { Blasts, Bombs } from './Hazards';
+import { GameCanvas } from '../render/GameCanvas';
+import { drawHud } from '../render/drawHud';
+import { drawScene } from '../render/drawScene';
+import type { Painter } from '../render/Painter';
 import { Hud } from './Hud';
 import { Overlay } from './Overlay';
-import { Particles } from './Particles';
-import { Supplies } from './Supplies';
-import { Survivor } from './Survivor';
 
 const RESTART_DELAY = 0.8;
 
@@ -92,19 +90,22 @@ export function Game() {
   useAutoPause(() => { pause(world); sound.stopAmbience(); render(); });
   const pan = useSwipeControls({ onTap: onJump, onSwipeUp: () => {}, onSwipeDown: onDive });
 
+  const s = size.h / WORLD_HEIGHT;
+  const insetsRef = useRef({ top: 0, left: 0, right: 0 });
+  insetsRef.current = s > 0 ? { top: insets.top / s, left: insets.left / s, right: insets.right / s } : insetsRef.current;
+  const drawFrame = useCallback((painter: Painter) => {
+    drawScene(painter, world);
+    drawHud(painter, world, insetsRef.current);
+  }, [world]);
+
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     setSize({ w: width, h: height });
     resize(world, width / (height / WORLD_HEIGHT));
   };
 
-  const s = size.h / WORLD_HEIGHT;
   const viewW = world.width * s;
   const p = world.player;
-  const shakeX = Math.sin(world.time * 93) * world.shake * 9 * s;
-  const shakeY = Math.cos(world.time * 71) * world.shake * 7 * s;
-  const invuln = isInvulnerable(world);
-  const blink = invuln && Math.sin(world.time * 30) > 0;
   const score = finalScore(world);
   const isNewBest = world.phase === 'over' && score > 0 && score > bestAtStart.current;
 
@@ -112,27 +113,11 @@ export function Game() {
     <View style={styles.root} onLayout={onLayout}>
       {size.h > 0 && (
         <View style={[styles.stage, { width: viewW, height: size.h }]}>
-          <View style={[StyleSheet.absoluteFill, { transform: [{ translateX: shakeX }, { translateY: shakeY }] }]} {...pan.panHandlers}>
-            <City scale={s} scroll={world.scroll} time={world.time} planes={world.planes} width={world.width} />
-            <Ground scale={s} scroll={world.scroll} craters={world.craters} />
-            <Supplies supplies={world.supplies} time={world.time} scale={s} />
-            <Bombs world={world} scale={s} />
-            <Survivor
-              x={playerX(world)} y={p.y} scale={s} runCycle={p.runCycle} airborne={!p.onGround} vy={p.vy} time={world.time}
-              blink={blink} hurt={world.time - p.hurtTime < 0.25} collapsed={world.phase === 'over' && p.onGround}
-            />
-            <Blasts blasts={world.blasts} scale={s} />
-            <Particles particles={world.particles} scale={s} />
-          </View>
-          {world.flash > 0 && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFB070', opacity: world.flash * 0.3 }]} />}
-          {invuln && world.phase === 'playing' && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 6, borderColor: 'rgba(229,72,77,0.6)' }]} />}
+          <GameCanvas width={viewW} height={size.h} scale={s} draw={drawFrame} />
+          <View style={StyleSheet.absoluteFill} {...pan.panHandlers} />
 
           {world.phase !== 'ready' && (
-            <Hud
-              hearts={p.hearts} energy={p.energy} metres={metres(world)} coins={world.coins} time={world.time} muted={muted}
-              top={insets.top} left={insets.left} right={insets.right} onPause={onPause} onToggleMute={onToggleMute}
-              showPause={world.phase === 'playing'}
-            />
+            <Hud muted={muted} top={insets.top} right={insets.right} showPause={world.phase === 'playing'} onPause={onPause} onToggleMute={onToggleMute} />
           )}
 
           <Overlay
