@@ -1,27 +1,14 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { AMBIENCE, AMBIENCE_VOLUME, SOURCES, VOLUME, type SoundApi, type SoundName } from './soundSources';
+
+export type { SoundName } from './soundSources';
 
 /**
- * One sound module for every platform: expo-audio uses native players on
- * iOS/Android and HTML audio on the web. Sounds that can overlap (explosions,
+ * Native (iOS/Android) sound with expo-audio. The web uses sound.web.ts. Sounds that can overlap (explosions,
  * coins) get a small pool of players so a new hit never cuts off the last one.
  */
-const SOURCES = {
-  jump: require('../../assets/sounds/jump.wav'),
-  food: require('../../assets/sounds/food.wav'),
-  drink: require('../../assets/sounds/drink.wav'),
-  coin: require('../../assets/sounds/coin.wav'),
-  whistle: require('../../assets/sounds/whistle.wav'),
-  explosion: require('../../assets/sounds/explosion.wav'),
-  hurt: require('../../assets/sounds/hurt.wav'),
-  warning: require('../../assets/sounds/warning.wav'),
-  gameover: require('../../assets/sounds/gameover.wav'),
-  siren: require('../../assets/sounds/siren.wav'),
-} as const;
-
-export type SoundName = keyof typeof SOURCES;
 
 const POOL: Partial<Record<SoundName, number>> = { explosion: 3, whistle: 3, coin: 2, jump: 2, food: 2, drink: 2 };
-const VOLUME: Partial<Record<SoundName, number>> = { whistle: 0.35, jump: 0.5, siren: 0.5, explosion: 0.9 };
 
 let players: Partial<Record<SoundName, AudioPlayer[]>> = {};
 let cursor: Partial<Record<SoundName, number>> = {};
@@ -40,12 +27,12 @@ function init() {
       return p;
     });
   }
-  ambience = createAudioPlayer(require('../../assets/sounds/ambience.wav'));
+  ambience = createAudioPlayer(AMBIENCE);
   ambience.loop = true;
-  ambience.volume = 0.35;
+  ambience.volume = AMBIENCE_VOLUME;
 }
 
-export const sound = {
+export const sound: SoundApi = {
   /** Create players lazily on the first user gesture (browsers block audio before one). */
   init,
   play(name: SoundName) {
